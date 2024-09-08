@@ -3,6 +3,7 @@ import logging
 import os
 import requests
 import pyodbc
+import time
 
 app = func.FunctionApp()
 
@@ -34,9 +35,43 @@ def process_ocr(blob_content):
         'Ocp-Apim-Subscription-Key': OCR_KEY,
         'Content-Type': 'application/octet-stream'
     }
+    
+    # Initial OCR API call to submit the image for processing
     response = requests.post(f"{OCR_ENDPOINT}/vision/v3.2/read/analyze", headers=headers, data=blob_content)
-    response.raise_for_status()  # Raise exception if OCR API fails
-    return response.json()
+    
+    if response.status_code != 202:
+        logging.error(f"OCR API call failed: {response.text}")
+        raise Exception(f"OCR API call failed: {response.text}")
+    
+    # Get the operation location from the response headers
+    operation_location = response.headers.get('Operation-Location')
+    if not operation_location:
+        raise Exception("Operation-Location header is missing from OCR API response.")
+    
+    logging.info("OCR processing started. Polling for results...")
+    
+    # Poll the OCR API until the processing is complete
+    poll_attempts = 0
+    max_poll_attempts = 10
+    while poll_attempts < max_poll_attempts:
+        time.sleep(3)  # Wait for 3 seconds before polling again
+        poll_response = requests.get(operation_location, headers={'Ocp-Apim-Subscription-Key': OCR_KEY})
+        
+        if poll_response.status_code == 200:
+            poll_result = poll_response.json()
+            status = poll_result.get("status")
+            logging.info(f"OCR status: {status}")
+            
+            # Check if the status indicates the process is complete
+            if status == "succeeded":
+                return poll_result
+            elif status == "failed":
+                raise Exception("OCR processing failed.")
+        
+        poll_attempts += 1
+        logging.info(f"Polling attempt {poll_attempts}/{max_poll_attempts}")
+    
+    raise Exception("OCR processing took too long or did not complete.")
 
 def extract_text(ocr_result):
     """Extracts text from the OCR response."""
