@@ -25,8 +25,11 @@ def blob_trigger(myblob: func.InputStream):
         ocr_result = process_ocr(blob_content)  # Send to OCR service
         extracted_text = extract_text(ocr_result)  # Extract text from OCR result
 
-        # Save the extracted text to SQL database
-        save_to_db(myblob.name, extracted_text)
+        # Parse relevant information
+        asset_type, manufacturer, model_number, serial_number, document_type = parse_extracted_text(extracted_text)
+
+        # Save the extracted text and parsed data to SQL database
+        save_to_db(myblob.name, extracted_text, asset_type, manufacturer, model_number, serial_number, document_type)
     except Exception as e:
         logging.error(f"Failed to process blob {myblob.name}: {str(e)}")
 
@@ -86,8 +89,30 @@ def extract_text(ocr_result):
         raise Exception(f"Failed to extract text from OCR result: {str(e)}")
 
 
-def save_to_db(blob_name, extracted_text):
-    """Saves the extracted text to Azure SQL Database using ODBC connection."""
+def parse_extracted_text(extracted_text):
+    """Parses the extracted text to identify asset type, manufacturer, model number, serial number, and document type."""
+    # Basic keyword matching to extract relevant information (adjust based on actual file structure)
+    asset_type = find_value(extracted_text, "Asset Type: ")
+    manufacturer = find_value(extracted_text, "Manufacturer: ")
+    model_number = find_value(extracted_text, "Model Number: ")
+    serial_number = find_value(extracted_text, "Serial Number: ")
+    document_type = find_value(extracted_text, "Document Type: ")
+
+    return asset_type, manufacturer, model_number, serial_number, document_type
+
+
+def find_value(text, keyword):
+    """Finds a value in the text based on the keyword."""
+    try:
+        start = text.index(keyword) + len(keyword)
+        end = text.index("\n", start)
+        return text[start:end].strip()
+    except ValueError:
+        return None
+
+
+def save_to_db(blob_name, extracted_text, asset_type, manufacturer, model_number, serial_number, document_type):
+    """Saves the extracted text and parsed data to Azure SQL Database using ODBC connection."""
     try:
         # ODBC Connection string with the necessary driver and encryption settings
         connection_string = "Driver={ODBC Driver 18 for SQL Server};Server=tcp:syncrowin-sql-server.database.windows.net,1433;Database=SyncrowinAssetDB;Uid=syncrowin-db-admin;Pwd=Ch5forsyn;Encrypt=yes;TrustServerCertificate=no;Connection Timeout=30;"
@@ -95,10 +120,13 @@ def save_to_db(blob_name, extracted_text):
         # Establish connection to the Azure SQL Database
         connection = pyodbc.connect(connection_string)
         cursor = connection.cursor()
-        
-        # Insert blob name and extracted text into the SQL table
-        cursor.execute("INSERT INTO AssetData (FileName, ExtractedText) VALUES (?, ?)", (blob_name, extracted_text))
-        
+
+        # Insert into AssetData table
+        cursor.execute("""
+            INSERT INTO AssetData (FileName, ExtractedText, AssetType, Manufacturer, ModelNumber, SerialNumber, DocumentType, CreatedAt) 
+            VALUES (?, ?, ?, ?, ?, ?, ?, GETDATE())
+        """, (blob_name, extracted_text, asset_type, manufacturer, model_number, serial_number, document_type))
+
         # Commit the transaction
         connection.commit()
 
@@ -109,3 +137,4 @@ def save_to_db(blob_name, extracted_text):
         logging.info(f"Saved data for {blob_name} to database successfully.")
     except Exception as e:
         logging.error(f"Error saving data to SQL Database: {str(e)}")
+
