@@ -1,0 +1,12 @@
+/**
+* Brief description
+* @author Palida Parichayawong <103822045>
+* @version 1.8
+*/
+class HelloWorld1 {
+    public static void main(String[] args) {
+        System.out.println("How are you, Palida?"); // Display the string.
+    }
+}
+
+Lab2_AUDtoZARConverter
