@@ -87,17 +87,18 @@ def extract_text(ocr_result):
 
 
 def save_to_db(blob_name, extracted_text):
-    """Saves the extracted text to Azure SQL Database."""
+    """Saves the extracted text to Azure SQL Database using ODBC connection."""
     try:
+        # ODBC Connection string with the necessary driver and encryption settings
+        connection_string = "Driver={ODBC Driver 18 for SQL Server};Server=tcp:syncrowin-sql-server.database.windows.net,1433;Database=SyncrowinAssetDB;Uid=syncrowin-db-admin;Pwd=Ch5forsyn;Encrypt=yes;TrustServerCertificate=no;Connection Timeout=30;"
+        
         # Establish connection to the Azure SQL Database
-        connection = pyodbc.connect(
-            f"DRIVER={{ODBC Driver 17 for SQL Server}};{DB_CONNECTION_STRING}"
-        )
+        connection = pyodbc.connect(connection_string)
         cursor = connection.cursor()
-
+        
         # Insert blob name and extracted text into the SQL table
         cursor.execute("INSERT INTO AssetData (FileName, ExtractedText) VALUES (?, ?)", (blob_name, extracted_text))
-
+        
         # Commit the transaction
         connection.commit()
 
@@ -108,4 +109,4 @@ def save_to_db(blob_name, extracted_text):
         logging.info(f"Saved data for {blob_name} to database successfully.")
     except Exception as e:
         logging.error(f"Error saving data to SQL Database: {str(e)}")
-        raise Exception(f"Error saving data to SQL Database: {str(e)}")
+
