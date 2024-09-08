@@ -109,4 +109,3 @@ def save_to_db(blob_name, extracted_text):
         logging.info(f"Saved data for {blob_name} to database successfully.")
     except Exception as e:
         logging.error(f"Error saving data to SQL Database: {str(e)}")
-
